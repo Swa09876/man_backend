@@ -1,0 +1,438 @@
+// Prisma schema for Shri Omkareshwar Temple Recreation
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// Authentication & Administration
+// -------------------------------------------------------------
+enum AdminRole {
+  SUPER_ADMIN
+  TRUSTEE
+  ACCOUNTS_OFFICER
+  PUJA_COORDINATOR
+  COUNTER_STAFF
+}
+
+model AdminUser {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  fullName     String
+  role         AdminRole   @default(COUNTER_STAFF)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  auditLogs    AuditLog[]
+
+  @@map("admin_users")
+}
+
+model AuditLog {
+  id         String     @id @default(uuid())
+  adminId    String
+  admin      AdminUser  @relation(fields: [adminId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime   @default(now())
+
+  @@index([adminId])
+  @@map("audit_logs")
+}
+
+// -------------------------------------------------------------
+// Devotee Information
+// -------------------------------------------------------------
+model Devotee {
+  id              String           @id @default(uuid())
+  firstName       String
+  lastName        String
+  mobile          String
+  email           String?
+  gender          String
+  dateOfBirth     DateTime?
+  idProofType     String?          // AADHAAR, PASSPORT, PAN
+  idProofNumber   String?
+  address         String?
+  city            String?
+  state           String?
+  pinCode         String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  bookings        DarshanBooking[]
+  pujaBookings    PujaBooking[]
+  donations       Donation[]
+  orders          Order[]
+
+  @@index([mobile])
+  @@index([idProofNumber])
+  @@map("devotees")
+}
+
+// -------------------------------------------------------------
+// Shighra Darshan & Ticket Booking
+// -------------------------------------------------------------
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+model DarshanSlot {
+  id          String           @id @default(uuid())
+  slotName    String           // "7AM to 9AM", "10AM to 12PM", "2PM to 4PM", "6PM to 8PM"
+  startTime   String           // "07:00"
+  endTime     String           // "09:00"
+  totalQuota  Int              @default(500)
+  isActive    Boolean          @default(true)
+  bookings    DarshanBooking[]
+
+  @@map("darshan_slots")
+}
+
+model DarshanBooking {
+  id               String               @id @default(uuid())
+  bookingReference String               @unique // e.g. "OMK-DRS-20261011-8492"
+  devoteeId        String
+  devotee          Devotee              @relation(fields: [devoteeId], references: [id])
+  slotId           String
+  slot             DarshanSlot          @relation(fields: [slotId], references: [id])
+  bookingDate      DateTime             // Date of Darshan
+  totalPerson      Int                  @default(1)
+  totalAmount      Decimal              @db.Decimal(10, 2)
+  status           BookingStatus        @default(PENDING)
+  paymentId        String?              @unique
+  payment          PaymentTransaction?  @relation(fields: [paymentId], references: [id])
+  attendees        BookingAttendee[]
+  ticket           Ticket?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([bookingDate, slotId])
+  @@index([bookingReference])
+  @@map("darshan_bookings")
+}
+
+model BookingAttendee {
+  id            String         @id @default(uuid())
+  bookingId     String
+  booking       DarshanBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  fullName      String
+  gender        String
+  age           Int
+  idProofNumber String?
+  createdAt     DateTime       @default(now())
+
+  @@map("booking_attendees")
+}
+
+model Ticket {
+  id               String         @id @default(uuid())
+  ticketNumber     String         @unique // e.g. "TKT-OMK-93821"
+  bookingId        String         @unique
+  booking          DarshanBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  qrPayload        String         // Signed verification token for gate scanner
+  isVerifiedAtGate Boolean        @default(false)
+  verifiedAt       DateTime?
+  pdfUrl           String?
+  createdAt        DateTime       @default(now())
+
+  @@map("tickets")
+}
+
+// -------------------------------------------------------------
+// Puja & Ritual Offerings
+// -------------------------------------------------------------
+model PujaService {
+  id              String        @id @default(uuid())
+  category        String        // "Abhishek Pooja", "Partheshwar", "Somwar Sawari", etc.
+  name            String        // "Jalabhishek 1 Brahmin", "Panchamrit Pujan"
+  duration        String        // "30 Min", "1.5 Hour"
+  basePrice       Decimal       @db.Decimal(10, 2)
+  personsIncluded Int           @default(2)
+  extraPersonFee  Decimal       @default(300.00) @db.Decimal(10, 2)
+  description     String        @db.Text
+  imagePath       String?
+  isActive        Boolean       @default(true)
+  bookings        PujaBooking[]
+
+  @@map("puja_services")
+}
+
+model PujaBooking {
+  id               String              @id @default(uuid())
+  bookingReference String              @unique
+  devoteeId        String
+  devotee          Devotee             @relation(fields: [devoteeId], references: [id])
+  serviceId        String
+  service          PujaService         @relation(fields: [serviceId], references: [id])
+  pujaDate         DateTime
+  gotra            String?
+  sankalpName      String?
+  totalPerson      Int                 @default(2)
+  totalAmount      Decimal             @db.Decimal(10, 2)
+  status           BookingStatus       @default(PENDING)
+  paymentId        String?             @unique
+  payment          PaymentTransaction? @relation(fields: [paymentId], references: [id])
+  priestAssigned   String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@map("puja_bookings")
+}
+
+// -------------------------------------------------------------
+// Accommodation (Vishramalaya)
+// -------------------------------------------------------------
+model AccommodationRoom {
+  id          String   @id @default(uuid())
+  name        String   // "Vishramalaya Night Stay", "Vishramalaya Day Stay"
+  roomType    String   // "Deluxe AC", "Family Non-AC", "Dormitory"
+  basePrice   Decimal  @db.Decimal(10, 2)
+  maxCapacity Int      @default(4)
+  totalRooms  Int      @default(50)
+  isActive    Boolean  @default(true)
+  bookings    AccommodationBooking[]
+
+  @@map("accommodation_rooms")
+}
+
+model AccommodationBooking {
+  id               String              @id @default(uuid())
+  bookingReference String              @unique
+  devoteeId        String
+  roomId           String
+  room             AccommodationRoom   @relation(fields: [roomId], references: [id])
+  checkInDate      DateTime
+  checkOutDate     DateTime
+  totalGuests      Int                 @default(2)
+  totalAmount      Decimal             @db.Decimal(10, 2)
+  status           BookingStatus       @default(PENDING)
+  paymentId        String?             @unique
+  payment          PaymentTransaction? @relation(fields: [paymentId], references: [id])
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@map("accommodation_bookings")
+}
+
+// -------------------------------------------------------------
+// Prasadalaya Meal Coupons
+// -------------------------------------------------------------
+model PrasadCoupon {
+  id               String              @id @default(uuid())
+  couponCode       String              @unique
+  couponType       String              // "Food Coupon", "Khichdi Coupon"
+  mealDate         DateTime
+  mealSlot         String              // "Lunch (11:30 AM - 3:30 PM)", "Dinner (7:00 PM - 9:30 PM)"
+  quantity         Int                 @default(1)
+  unitPrice        Decimal             @default(50.00) @db.Decimal(10, 2)
+  totalAmount      Decimal             @db.Decimal(10, 2)
+  devoteeName      String
+  devoteeMobile    String
+  status           BookingStatus       @default(CONFIRMED)
+  paymentId        String?             @unique
+  payment          PaymentTransaction? @relation(fields: [paymentId], references: [id])
+  isRedeemed       Boolean             @default(false)
+  redeemedAt       DateTime?
+  createdAt        DateTime            @default(now())
+
+  @@map("prasad_coupons")
+}
+
+// -------------------------------------------------------------
+// Donations & Seva
+// -------------------------------------------------------------
+model DonationCategory {
+  id          String     @id @default(uuid())
+  name        String     // "General Donation", "Ann Kshetra", "Shayan Shringar"
+  code        String     @unique
+  description String?
+  isActive    Boolean    @default(true)
+  donations   Donation[]
+
+  @@map("donation_categories")
+}
+
+model Donation {
+  id               String              @id @default(uuid())
+  receiptNumber    String              @unique
+  devoteeId        String
+  devotee          Devotee             @relation(fields: [devoteeId], references: [id])
+  categoryId       String
+  category         DonationCategory    @relation(fields: [categoryId], references: [id])
+  amount           Decimal             @db.Decimal(10, 2)
+  panNumber        String?
+  paymentId        String              @unique
+  payment          PaymentTransaction  @relation(fields: [paymentId], references: [id])
+  is80GClaimed     Boolean             @default(false)
+  taxExemption     TaxExemption80G?
+  createdAt        DateTime            @default(now())
+
+  @@map("donations")
+}
+
+model TaxExemption80G {
+  id               String    @id @default(uuid())
+  certificateNo    String    @unique
+  donationId       String    @unique
+  donation         Donation  @relation(fields: [donationId], references: [id])
+  donorPAN         String
+  donorName        String
+  approvedAt       DateTime  @default(now())
+  pdfUrl           String?
+  createdAt        DateTime  @default(now())
+
+  @@map("tax_exemptions_80g")
+}
+
+// -------------------------------------------------------------
+// Mahaprasad Store (E-Commerce)
+// -------------------------------------------------------------
+enum OrderStatus {
+  PLACED
+  PROCESSING
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+}
+
+model Product {
+  id          String           @id @default(uuid())
+  name        String           // "Laddu Mahaprasad"
+  description String           @db.Text
+  variants    ProductVariant[]
+  createdAt   DateTime         @default(now())
+
+  @@map("products")
+}
+
+model ProductVariant {
+  id         String      @id @default(uuid())
+  productId  String
+  product    Product     @relation(fields: [productId], references: [id])
+  weight     String      // "250g", "500g", "1kg"
+  price      Decimal     @db.Decimal(10, 2)
+  stockQty   Int         @default(1000)
+  items      OrderItem[]
+
+  @@map("product_variants")
+}
+
+model Order {
+  id               String              @id @default(uuid())
+  orderNumber      String              @unique // "OMK-PRD-20261011-9481"
+  trackingId       String?             @unique // India Post Tracking No
+  devoteeId        String
+  devotee          Devotee             @relation(fields: [devoteeId], references: [id])
+  status           OrderStatus         @default(PLACED)
+  itemsSubtotal    Decimal             @db.Decimal(10, 2)
+  shippingCharge   Decimal             @db.Decimal(10, 2)
+  totalAmount      Decimal             @db.Decimal(10, 2)
+  paymentId        String?             @unique
+  payment          PaymentTransaction? @relation(fields: [paymentId], references: [id])
+  address          DeliveryAddress?
+  items            OrderItem[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String         @id @default(uuid())
+  orderId    String
+  order      Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId  String
+  variant    ProductVariant @relation(fields: [variantId], references: [id])
+  quantity   Int
+  unitPrice  Decimal        @db.Decimal(10, 2)
+  totalPrice Decimal        @db.Decimal(10, 2)
+
+  @@map("order_items")
+}
+
+model DeliveryAddress {
+  id            String   @id @default(uuid())
+  orderId       String   @unique
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  recipientName String
+  mobile        String
+  addressLine1  String
+  addressLine2  String?
+  landmark      String?
+  city          String
+  state         String
+  pinCode       String
+  createdAt     DateTime @default(now())
+
+  @@map("delivery_addresses")
+}
+
+// -------------------------------------------------------------
+// Payments & Transactions
+// -------------------------------------------------------------
+enum PaymentStatus {
+  INITIATED
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model PaymentTransaction {
+  id                    String                @id @default(uuid())
+  transactionRef        String                @unique // Gateway Order ID / Txn ID
+  provider              String                @default("RAZORPAY")
+  amount                Decimal               @db.Decimal(10, 2)
+  status                PaymentStatus         @default(INITIATED)
+  paymentMethod         String?               // UPI, CARD, NETBANKING
+  gatewayPaymentId      String?
+  signature             String?
+  darshanBooking        DarshanBooking?
+  pujaBooking           PujaBooking?
+  accommodationBooking  AccommodationBooking?
+  prasadCoupon          PrasadCoupon?
+  donation              Donation?
+  order                 Order?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  @@map("payment_transactions")
+}
+
+// -------------------------------------------------------------
+// Temple Dynamic Content (News, Media, Announcements, Feedback)
+// -------------------------------------------------------------
+model NewsAnnouncement {
+  id            String   @id @default(uuid())
+  title         String
+  summary       String
+  content       String   @db.Text
+  datePublished DateTime @default(now())
+  isPinned      Boolean  @default(false)
+  pdfAttachment String?
+  createdAt     DateTime @default(now())
+
+  @@map("news_announcements")
+}
+
+model DevoteeFeedback {
+  id          String   @id @default(uuid())
+  devoteeName String
+  email       String
+  mobile      String
+  category    String   // Darshan, Facilities, Cleanliness, General
+  message     String   @db.Text
+  status      String   @default("NEW") // NEW, REVIEWED, RESOLVED
+  createdAt   DateTime @default(now())
+
+  @@map("devotee_feedbacks")
+}

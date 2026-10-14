@@ -1,0 +1,39 @@
+# Compiled output
+/dist
+/node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables & secrets (keep .env.example tracked)
+.env
+.env.local
+.env.*.local
+
+# Local database storage folders
+/mongodata/
+/pgdata/
+*.sqlite
+*.sqlite-journal
+
+# TypeScript build info
+*.tsbuildinfo
+tsconfig.build.tsbuildinfo
+
+# IDE & editor directories
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
