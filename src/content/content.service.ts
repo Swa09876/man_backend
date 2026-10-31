@@ -81,7 +81,7 @@ export class ContentService {
         { session: 'Afternoon Session', startTime: '01:15 PM', endTime: '04:00 PM' },
         { session: 'Evening Session', startTime: '04:45 PM', endTime: '08:30 PM' },
       ],
-      helpline: '8989998686',
+      helpline: '8770473325',
     };
   }
 
@@ -116,7 +116,7 @@ export class ContentService {
       managingTrustee: 'Shri Rao Pushpendra Singh Chauhan',
       chiefExecutiveOfficer: 'Sub-Divisional Magistrate (SDM), Omkareshwar - Shri Pankaj Verma',
       address: 'Office of Shri Omkareshwar Mandir Trust, Mandhata, Omkareshwar, MP',
-      helpline: '8989998686',
+      helpline: '8770473325',
     };
   }
 }
