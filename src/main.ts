@@ -12,14 +12,27 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:3001',
-      'http://127.0.0.1:3001',
-      'http://localhost:3002',
-      'http://127.0.0.1:3002',
-    ],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or Postman)
+      if (!origin) return callback(null, true);
+
+      const isAllowed =
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1') ||
+        origin.includes('.ngrok-free.app') ||
+        origin.includes('.ngrok.io') ||
+        origin.includes('.loca.lt') ||
+        origin.includes('.trycloudflare.com') ||
+        /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin) ||
+        /^http:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/.test(origin);
+
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        // Fallback for custom domains or testing
+        callback(null, true);
+      }
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
