@@ -20,6 +20,7 @@ async function bootstrap() {
         origin.includes('localhost') ||
         origin.includes('127.0.0.1') ||
         origin.includes('.ngrok-free.app') ||
+        origin.includes('.ngrok-free.dev') ||
         origin.includes('.ngrok.io') ||
         origin.includes('.loca.lt') ||
         origin.includes('.trycloudflare.com') ||
